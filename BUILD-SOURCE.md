@@ -28,8 +28,8 @@ Manual dispatch with an explicit tag always builds (dedupe guard bypass).
 - Per cell: fetch `https://git.outfoxxed.me/quickshell/quickshell/archive/<tag>.tar.gz`,
   `cmake -DCMAKE_BUILD_TYPE=Release -DCRASH_HANDLER=OFF`, `ninja`,
   `DESTDIR` stage, `dpkg-deb -b`, `lintian`.
-- Artifacts named `<pkg>_<ver>-<build>.<suite>_<arch>.deb` so
-  `apt-repo/build-repo.sh` folds them into `pool/` + `dists/` unchanged.
+- Artifacts named `quickshell_<ver>-<build>+<suite>_<arch>.deb` (fleet
+  convention) so `apt-repo/build-repo.sh` folds them into `pool/` + `dists/`.
 
 ## Smoke gate
 

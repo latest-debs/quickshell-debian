@@ -11,7 +11,7 @@ set -euo pipefail
 
 TAG="$1"; BREV="${2:-1}"; SUITE="$3"; ARCH="$4"; LINTIAN="${5:-true}"
 VER="${TAG#v}"
-DEB="quickshell_${VER}-${BREV}.${SUITE}_${ARCH}.deb"
+DEB="quickshell_${VER}-${BREV}+${SUITE}_${ARCH}.deb"
 
 docker run --rm -e LINTIAN="$LINTIAN" -v "$PWD:/out" -w /build "debian:$SUITE" bash -c '
 set -euo pipefail
@@ -50,7 +50,7 @@ DESTDIR=/build/stage cmake --install build
 # Runtime Depends from the ELF deps actually linked (dpkg-shlibdeps), so the
 # package pulls its libraries instead of relying on the user to guess.
 cat > debian/changelog <<EOF
-quickshell (${VER}-${BREV}) unstable; urgency=medium
+quickshell (${VER}-${BREV}+${SUITE}) unstable; urgency=medium
 
   * Source-build pilot (Forgejo tag ${TAG}); see BUILD-SOURCE.md.
 
@@ -73,7 +73,7 @@ depends="$(dpkg-shlibdeps -O stage/usr/bin/qs 2>/dev/null | sed -n "s/^shlibs:De
 [ -n "$depends" ] || depends="libc6"
 cat > stage/DEBIAN/control <<EOF
 Package: quickshell
-Version: ${VER}-${BREV}.${SUITE}
+Version: ${VER}-${BREV}+${SUITE}
 Section: x11
 Priority: optional
 Architecture: ${ARCH}
