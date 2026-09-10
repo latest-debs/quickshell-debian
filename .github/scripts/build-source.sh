@@ -31,6 +31,16 @@ apt-get install -y -qq \
   libwayland-dev libwayland-bin wayland-protocols \
   libpipewire-0.3-dev libpam0g-dev libpolkit-agent-1-dev libpolkit-gobject-1-dev \
   libjemalloc-dev spirv-tools >/dev/null
+# wayland-protocols 1.44 (trixie) predates staging/ext-background-effect-v1,
+# which the quickshell background_effect module requires unconditionally. The
+# package is Architecture: all — pure protocol XML, consumed at build time —
+# so overlaying forky copy is safe and side-effect-free for the produced
+# binary. forky/sid already ship it.
+if [ "$SUITE" = "trixie" ]; then
+  echo "deb http://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky-wp.list
+  apt-get update -qq
+  apt-get install -y -qq -t forky wayland-protocols >/dev/null
+fi
 curl -fsSL "https://git.outfoxxed.me/quickshell/quickshell/archive/${TAG}.tar.gz" -o src.tar.gz
 mkdir -p src build stage/DEBIAN debian
 tar xzf src.tar.gz -C src --strip-components=1

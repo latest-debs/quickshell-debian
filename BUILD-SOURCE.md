@@ -21,7 +21,9 @@ Manual dispatch with an explicit tag always builds (dedupe guard bypass).
 ## Build matrix (`.github/workflows/release.yml`)
 
 - Suites: trixie, forky, sid (bookworm Qt 6.4 < required 6.6 private
-  headers; bullseye has no Qt6).
+  headers; bullseye has no Qt6). trixie's `wayland-protocols` (1.44) predates
+  `staging/ext-background-effect-v1`, so its container overlays forky's
+  version (arch-all protocol XML, build-time only); forky/sid ship it already.
 - Arches: amd64, arm64 (native runners; no QEMU in the pilot).
 - Per cell: fetch `https://git.outfoxxed.me/quickshell/quickshell/archive/<tag>.tar.gz`,
   `cmake -DCMAKE_BUILD_TYPE=Release -DCRASH_HANDLER=OFF`, `ninja`,
