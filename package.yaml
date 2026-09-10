@@ -1,0 +1,70 @@
+# Package definition for quickshell (SOURCE BUILD — first of its kind in this org)
+#
+# Upstream publishes NO Linux binaries, only source:
+#   https://git.outfoxxed.me/quickshell/quickshell
+# Mirror (for version detection only): https://github.com/quickshell-mirror/quickshell
+#
+# This is the pilot for build_mode: source. The stock debian-multiarch-builder
+# (binary-repack only) cannot build this; it needs either a builder upgrade
+# or the per-suite sbuild path documented in BUILD-SOURCE.md.
+
+package_name: quickshell
+github_repo: quickshell-mirror/quickshell
+# Canonical upstream is Forgejo; GitHub is a mirror used for tag detection.
+upstream_url: https://git.outfoxxed.me/quickshell/quickshell
+upstream_ref: "v0.3.1"
+artifact_format: source
+build_mode: source
+description: "Flexible QtQuick based desktop shell toolkit."
+license: LGPL-3.0-only
+
+# Debian parity exception (guard, not a current blocker): Debian only has
+# 0.3.0-1 (forky/sid — rolling, advisory; trixie-backports 0.3.0-1~bpo13+1),
+# so we are ahead of every released suite. The exception suppresses the
+# RETIRE hard-stop if a released suite (trixie) ever reaches >= our upstream,
+# keeping the pilot available for Ubuntu LTS/backports coverage.
+# See apt-repo/parity-exceptions.json.
+parity_exception: true
+
+# Source-build matrix. Triage: bookworm Qt6 (6.4) is too old for quickshell
+# (>=6.6 private headers); bullseye has no Qt6 at all. Start with trixie+,
+# widen only if the build proves green.
+build_suites:
+  - trixie
+  - forky
+  - sid
+skip_suites:
+  - bullseye
+  - bookworm
+
+# Per BUILD.md + Debian's own debian/control for quickshell 0.3.0-1.
+build_depends:
+  - cmake
+  - ninja-build
+  - pkg-config
+  - qt6-base-dev
+  - qt6-base-private-dev
+  - qt6-declarative-dev
+  - qt6-declarative-private-dev
+  - qt6-shadertools-dev
+  - qt6-svg-dev
+  - qt6-wayland-dev
+  - qt6-wayland-private-dev
+  - qt6-quick3d-dev
+  - wayland-protocols
+  - libdrm-dev
+  - libpipewire-0.3-dev
+  - libpam-dev
+  - libjemalloc-dev
+  - spirv-tools
+
+cmake_flags:
+  - -DCMAKE_BUILD_TYPE=Release
+  - -DCRASH_REPORTER=OFF
+
+# Only amd64/arm64 for the pilot; Qt+Wayland exotic-arch builds are unproven.
+architectures:
+  - amd64
+  - arm64
+
+smoke_skip: ""

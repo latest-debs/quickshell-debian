@@ -1,0 +1,12 @@
+{
+  "upstream_repo": "quickshell-mirror/quickshell",
+  "forgejo_repo": "quickshell/quickshell",
+  "tag": "v0.3.1",
+  "published_at": "2026-09-10T10:05:05Z",
+  "license": "LGPL-3.0-only",
+  "asset": "",
+  "sha256": "d60592622f1aa1cbb853d4814f605dfde827bc692befbfecffaccf4c90e352d8",
+  "source_tarball": "https://git.outfoxxed.me/quickshell/quickshell/archive/v0.3.1.tar.gz",
+  "checksum_verified": false,
+  "mode": "source"
+}

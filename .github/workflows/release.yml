@@ -1,0 +1,202 @@
+name: Build quickshell for Debian (source)
+
+on:
+  schedule:
+    # Auto-watch upstream every 3 hours and build new releases.
+    - cron: '23 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Upstream tag to build (e.g. v0.3.1)
+        type: string
+        required: false
+      build_version:
+        description: Debian build revision
+        type: string
+        required: true
+        default: '1'
+      auto:
+        description: 'Auto-detect the latest upstream release'
+        type: boolean
+        default: true
+      architecture:
+        description: Architecture to build (or 'all')
+        type: choice
+        default: 'all'
+        options: ['all', 'amd64', 'arm64']
+      enable_lintian:
+        description: Enable lintian validation
+        type: boolean
+        default: true
+      release_mode:
+        description: 'auto publishes immediately; draft keeps the GitHub draft for review'
+        type: choice
+        default: 'draft'
+        options: ['auto', 'draft']
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  prepare:
+    name: Determine version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.detect.outputs.version }}
+      build_version: ${{ steps.detect.outputs.build_version }}
+      should_build: ${{ steps.detect.outputs.should_build }}
+      archs: ${{ steps.archs.outputs.archs }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Detect version
+        id: detect
+        run: bash .github/scripts/detect-version.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MANUAL_VERSION: ${{ inputs.version }}
+          BUILD_VERSION: ${{ inputs.build_version }}
+          AUTO: ${{ github.event_name == 'schedule' || inputs.auto }}
+          IS_SCHEDULE: ${{ github.event_name == 'schedule' }}
+
+      - name: Resolve architecture matrix
+        id: archs
+        run: |
+          set -euo pipefail
+          case "${{ inputs.architecture }}" in
+            amd64) echo 'archs=["amd64"]' >> "$GITHUB_OUTPUT" ;;
+            arm64) echo 'archs=["arm64"]' >> "$GITHUB_OUTPUT" ;;
+            *)     echo 'archs=["amd64","arm64"]' >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Recheck upstream license
+        # Warn-only gate, same as the binary fleet: compares the live upstream
+        # SPDX license against the pin in package.yaml on every run.
+        run: bash .github/scripts/license-check.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    name: Build ${{ matrix.suite }}/${{ matrix.arch }}
+    needs: prepare
+    if: needs.prepare.outputs.should_build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [trixie, forky, sid]
+        arch: ${{ fromJSON(needs.prepare.outputs.archs) }}
+        exclude:
+          # Qt6/Wayland source build is unproven on 32-bit/exotic arches and
+          # the porter toolchains; pilot covers amd64 + arm64 only (package.yaml).
+          - arch: arm64
+            suite: sid
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build quickshell from source (debian:${{ matrix.suite }})
+        run: bash .github/scripts/build-source.sh "${{ needs.prepare.outputs.version }}" "${{ needs.prepare.outputs.build_version }}" "${{ matrix.suite }}" "${{ matrix.arch }}" "${{ inputs.enable_lintian }}"
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickshell-${{ matrix.suite }}-${{ matrix.arch }}
+          path: |
+            quickshell_*.deb
+          if-no-files-found: error
+
+  smoke:
+    name: Smoke Test
+    needs: [prepare, build]
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download trixie packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: quickshell-trixie-*
+          merge-multiple: true
+
+      - name: Run qs --version from the built package
+        run: |
+          set -euo pipefail
+          EXPECTED="${{ needs.prepare.outputs.version }}"
+          EXPECTED="${EXPECTED#v}"
+          # amd64 runner: test the amd64 artifact specifically, never arm64.
+          DEB="$(ls quickshell_*+trixie_amd64.deb | head -n1)"
+          out="$(docker run --rm -v "$PWD/$DEB:/pkg.deb:ro" debian:trixie \
+            bash -c 'apt-get update -qq && apt-get install -y -qq /pkg.deb >/dev/null && qs --version 2>&1' )"
+          echo "$out"
+          printf '%s' "$out" | grep -q "$EXPECTED" || { echo "::error::qs --version did not report $EXPECTED"; exit 1; }
+
+  release:
+    name: Release
+    needs: [prepare, build, smoke]
+    if: github.ref == 'refs/heads/main' && needs.build.result == 'success' && needs.smoke.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: quickshell-*
+          merge-multiple: true
+
+      - name: Generate build provenance
+        run: bash .github/scripts/generate-provenance.sh
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BUILD_VERSION: ${{ needs.prepare.outputs.build_version }}
+
+      - name: Generate SBOM
+        run: bash .github/scripts/generate-sbom.sh
+
+      - name: Gate duplicate release tags
+        id: dup-gate
+        run: |
+          TAG="${{ needs.prepare.outputs.version }}+${{ needs.prepare.outputs.build_version }}"
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.id' >/dev/null 2>&1; then
+            echo "::warning::Release tag $TAG already exists; skipping publish"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest build provenance
+        if: steps.dup-gate.outputs.exists == 'false'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            quickshell_*.deb
+
+      - name: Attest SBOM
+        if: steps.dup-gate.outputs.exists == 'false'
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: |
+            quickshell_*.deb
+          sbom-path: sbom.spdx.json
+
+      - name: Publish release
+        if: steps.dup-gate.outputs.exists == 'false'
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          draft: ${{ inputs.release_mode == 'draft' }}
+          tag_name: ${{ needs.prepare.outputs.version }}+${{ needs.prepare.outputs.build_version }}
+          name: ${{ needs.prepare.outputs.version }}+${{ needs.prepare.outputs.build_version }}
+          files: |
+            quickshell_*.deb
+            provenance.json
+            sbom.spdx.json
+          fail_on_unmatched_files: true

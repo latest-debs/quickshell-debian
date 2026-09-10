@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# build-source.sh <tag> <build-rev> <suite> <arch> [lintian true|false]
+#
+# Compile quickshell from the Forgejo source tag inside debian:<suite> and
+# wrap the install tree with dpkg-deb. This is the source-build pilot: unlike
+# every other repo in the org, there is no upstream binary to repack.
+#
+# Runs in the matrix cell's native architecture (amd64 on ubuntu-latest,
+# arm64 on ubuntu-24.04-arm); no emulation/cross-packaging.
+set -euo pipefail
+
+TAG="$1"; BREV="${2:-1}"; SUITE="$3"; ARCH="$4"; LINTIAN="${5:-true}"
+VER="${TAG#v}"
+DEB="quickshell_${VER}-${BREV}.${SUITE}_${ARCH}.deb"
+
+docker run --rm -e LINTIAN="$LINTIAN" -v "$PWD:/out" -w /build "debian:$SUITE" bash -c '
+set -euo pipefail
+TAG="$1"; VER="$2"; BREV="$3"; SUITE="$4"; ARCH="$5"; DEB="$6"; LINTIAN="$7"
+apt-get update -qq
+apt-get install -y -qq \
+  cmake ninja-build pkg-config curl ca-certificates dpkg-dev lintian \
+  qt6-base-dev qt6-base-private-dev qt6-declarative-dev \
+  qt6-declarative-private-dev qt6-shadertools-dev qt6-svg-dev \
+  qt6-wayland-dev qt6-wayland-private-dev qt6-quick3d-dev wayland-protocols \
+  libdrm-dev libpipewire-0.3-dev libpam-dev libjemalloc-dev spirv-tools >/dev/null
+curl -fsSL "https://git.outfoxxed.me/quickshell/quickshell/archive/${TAG}.tar.gz" -o src.tar.gz
+mkdir -p src build stage/DEBIAN debian
+tar xzf src.tar.gz -C src --strip-components=1
+cmake -S src -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCRASH_REPORTER=OFF
+cmake --build build
+DESTDIR=/build/stage cmake --install build
+# Runtime Depends from the ELF deps actually linked (dpkg-shlibdeps), so the
+# package pulls its libraries instead of relying on the user to guess.
+cat > debian/changelog <<EOF
+quickshell (${VER}-${BREV}) unstable; urgency=medium
+
+  * Source-build pilot (Forgejo tag ${TAG}); see BUILD-SOURCE.md.
+
+ -- latest-debs <latest-debs@users.noreply.github.com>  $(date -R)
+EOF
+cat > debian/control <<EOF
+Source: quickshell
+Section: x11
+Priority: optional
+Maintainer: latest-debs <latest-debs@users.noreply.github.com>
+Standards-Version: 4.7.0
+
+Package: quickshell
+Architecture: any
+Depends: \${shlibs:Depends}
+Description: Flexible QtQuick based desktop shell toolkit.
+ Source-built pilot (Forgejo tag ${TAG}); see BUILD-SOURCE.md.
+EOF
+depends="$(dpkg-shlibdeps -O stage/usr/bin/qs 2>/dev/null | sed -n "s/^shlibs:Depends=//p" || true)"
+[ -n "$depends" ] || depends="libc6"
+cat > stage/DEBIAN/control <<EOF
+Package: quickshell
+Version: ${VER}-${BREV}.${SUITE}
+Section: x11
+Priority: optional
+Architecture: ${ARCH}
+Depends: ${depends}
+Maintainer: latest-debs <latest-debs@users.noreply.github.com>
+Description: Flexible QtQuick based desktop shell toolkit.
+ Source-built pilot (Forgejo tag ${TAG}); see BUILD-SOURCE.md.
+EOF
+dpkg-deb -b stage "/out/${DEB}"
+if [ "$LINTIAN" = "true" ]; then
+  lintian --no-tag-display-limit "/out/${DEB}" || \
+    echo "::warning::lintian reported findings for ${DEB} (non-fatal in the source-build pilot)"
+fi
+' _ "$TAG" "$VER" "$BREV" "$SUITE" "$ARCH" "$DEB" "$LINTIAN"
+
+echo "built $DEB"
