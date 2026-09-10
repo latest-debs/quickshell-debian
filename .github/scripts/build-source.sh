@@ -44,11 +44,17 @@ fi
 curl -fsSL "https://git.outfoxxed.me/quickshell/quickshell/archive/${TAG}.tar.gz" -o src.tar.gz
 mkdir -p src build stage/DEBIAN debian
 tar xzf src.tar.gz -C src --strip-components=1
-cmake -S src -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCRASH_HANDLER=OFF
+# Debian layout: prefix /usr, and QML modules under the multiarch Qt QML dir
+# (INSTALL_QMLDIR is empty by default, and quickshell then SILENTLY installs no
+# QML modules at all — see cmake/install-qml-module.cmake).
+MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
+QMLDIR="/usr/lib/${MULTIARCH}/qt6/qml"
+cmake -S src -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCRASH_HANDLER=OFF \
+  -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_QMLDIR="${QMLDIR}"
 cmake --build build
 DESTDIR=/build/stage cmake --install build
-# Runtime Depends from the ELF deps actually linked (dpkg-shlibdeps), so the
-# package pulls its libraries instead of relying on the user to guess.
+# debian/{changelog,control} give dpkg-shlibdeps the context it needs to emit
+# a Depends line (shlibs:Depends) from the shipped ELF files.
 cat > debian/changelog <<EOF
 quickshell (${VER}-${BREV}+${SUITE}) unstable; urgency=medium
 
@@ -69,7 +75,10 @@ Depends: \${shlibs:Depends}
 Description: Flexible QtQuick based desktop shell toolkit.
  Source-built pilot (Forgejo tag ${TAG}); see BUILD-SOURCE.md.
 EOF
-depends="$(dpkg-shlibdeps -O stage/usr/bin/qs 2>/dev/null | sed -n "s/^shlibs:Depends=//p" || true)"
+# Runtime Depends from every ELF we ship (the main binary + the QML plugin
+# .so files), so the package pulls its Qt/pipewire/polkit libs.
+mapfile -t elfs < <(find stage/usr -type f \( -name quickshell -o -name '*.so' \))
+depends="$(dpkg-shlibdeps -O "${elfs[@]}" 2>/dev/null | sed -n "s/^shlibs:Depends=//p" || true)"
 [ -n "$depends" ] || depends="libc6"
 cat > stage/DEBIAN/control <<EOF
 Package: quickshell
