@@ -2,7 +2,7 @@ name: Report build failures
 
 on:
   workflow_run:
-    workflows: ["Build quickshell for Debian (source)"]
+    workflows: ["release.yml"]
     types: [completed]
 
 permissions:
