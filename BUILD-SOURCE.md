@@ -23,9 +23,12 @@ The standard scaffold workflow drives it — there is no repo-local build script
 ## How it builds
 
 `.github/workflows/release.yml` (scaffold template) computes a per-architecture
-native matrix, then the builder compiles the tag inside `debian:<suite>`, stages
-the install tree, computes runtime `Depends` with `dpkg-shlibdeps`, and wraps it
-with `dpkg-deb`. Artifacts use the fleet naming
+native matrix, then the builder bakes a per-suite image (toolchain +
+`build_depends`), exports a chroot tarball under `/tmp/download_cache/chroots/`,
+and compiles the tag once in that chroot (`unshare`/`chroot`, not `docker run`)
+with `ccache`. Forky and sid re-wrap in parallel in their own chroots. Each wrap
+recomputes runtime `Depends`
+with that suite's `dpkg-shlibdeps` and `dpkg-deb`. Artifacts use the fleet naming
 `quickshell_<ver>-<build>+<suite>_<arch>.deb`, so `apt-repo/build-repo.sh`
 folds them into `pool/` + `dists/`.
 
