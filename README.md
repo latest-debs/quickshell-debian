@@ -4,11 +4,13 @@
 QtQuick based desktop shell toolkit — packaged for Debian as part of
 [latest-debs](https://github.com/latest-debs).
 
-> **Pilot: first source-built package in this org.** Every other
-> `*-debian` repo repacks an upstream binary; quickshell publishes no
-> binaries, so this repo compiles from the Forgejo source tag per suite
-> (see `BUILD-SOURCE.md`). Bookworm/bullseye are skipped (Qt6 too old /
-> absent); trixie, forky, sid ship, Ubuntu LTS via the apt-repo alias.
+> **First source-built package in this org.** Every other `*-debian` repo
+> repacks an upstream binary; quickshell publishes no binaries, so it is
+> compiled from the Forgejo source tag per suite by
+> [debian-multiarch-builder](https://github.com/ranjithrajv/debian-multiarch-builder)'s
+> `build_mode: source` (see `BUILD-SOURCE.md`). Bookworm/bullseye are skipped
+> (Qt6 too old / absent); trixie, forky, sid ship, Ubuntu LTS via the apt-repo
+> alias.
 
 ## Install
 

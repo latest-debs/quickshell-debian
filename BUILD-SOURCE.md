@@ -1,44 +1,41 @@
 # BUILD-SOURCE.md — how the quickshell source build works
 
-Quickshell publishes no Linux binaries, so the stock
-`debian-multiarch-builder` (binary-repack) cannot build it. This repo
-compiles the Forgejo source tag once per suite in a
-`debian:<suite>` container and wraps the result with `dpkg-deb`.
+quickshell publishes no Linux binaries, so it is packaged with
+[debian-multiarch-builder](https://github.com/ranjithrajv/debian-multiarch-builder)'s
+`build_mode: source` (see that repo's `examples/source-mode-package.yaml`).
+The standard scaffold workflow drives it — there is no repo-local build script.
 
-## Version detection
+## Configuration (`package.yaml`)
 
-`.github/scripts/detect-version.sh` (fleet template + Forgejo fallback):
+- `build_mode: source`, `build_system: cmake`
+- `upstream_url`/`upstream_ref` — the Forgejo tag, fetched as
+  `<url>/archive/<ref>.tar.gz` (GitHub is only a tag-detection mirror)
+- `build_suites` trixie/forky/sid; `skip_suites` bullseye/bookworm (Qt6 too
+  old / absent)
+- `architectures` amd64/arm64 — native runners, no QEMU/cross
+- `build_depends` derived from upstream BUILD.md + each
+  `find_package`/`pkg_check_modules` in the tree
+- `cmake_flags` `-DCMAKE_BUILD_TYPE=Release -DCRASH_HANDLER=OFF`
+- `build_apt_sources` / `build_depends_suites` — trixie installs forky's
+  `wayland-protocols` (1.44 predates `staging/ext-background-effect-v1`,
+  required by the background_effect module)
 
-1. GitHub mirror `quickshell-mirror/quickshell` `releases/latest`
-   (prerelease fallback included).
-2. Forgejo tags API derived from `package.yaml:upstream_url`
-   (`https://git.outfoxxed.me/api/v1/repos/quickshell/quickshell/tags`),
-   highest semver tag wins.
-3. Compare against this repo's newest tag; build only when newer.
+## How it builds
 
-Manual dispatch with an explicit tag always builds (dedupe guard bypass).
-
-## Build matrix (`.github/workflows/release.yml`)
-
-- Suites: trixie, forky, sid (bookworm Qt 6.4 < required 6.6 private
-  headers; bullseye has no Qt6). trixie's `wayland-protocols` (1.44) predates
-  `staging/ext-background-effect-v1`, so its container overlays forky's
-  version (arch-all protocol XML, build-time only); forky/sid ship it already.
-- Arches: amd64, arm64 (native runners; no QEMU in the pilot).
-- Per cell: fetch `https://git.outfoxxed.me/quickshell/quickshell/archive/<tag>.tar.gz`,
-  `cmake -DCMAKE_BUILD_TYPE=Release -DCRASH_HANDLER=OFF`, `ninja`,
-  `DESTDIR` stage, `dpkg-deb -b`, `lintian`.
-- Artifacts named `quickshell_<ver>-<build>+<suite>_<arch>.deb` (fleet
-  convention) so `apt-repo/build-repo.sh` folds them into `pool/` + `dists/`.
+`.github/workflows/release.yml` (scaffold template) computes a per-architecture
+native matrix, then the builder compiles the tag inside `debian:<suite>`, stages
+the install tree, computes runtime `Depends` with `dpkg-shlibdeps`, and wraps it
+with `dpkg-deb`. Artifacts use the fleet naming
+`quickshell_<ver>-<build>+<suite>_<arch>.deb`, so `apt-repo/build-repo.sh`
+folds them into `pool/` + `dists/`.
 
 ## Smoke gate
 
-`trixie` container: `dpkg -i` the built `.deb`, `qs --version` must print
-the expected tag. Wayland-session behavior is out of scope for CI.
+On trixie the built `.deb` is installed and `qs --version` must print the
+expected tag. Wayland-session behaviour is out of scope for CI.
 
 ## Provenance
 
-Same as the binary fleet: `provenance.json` (builder ref, run URL,
-source commit, SHA-256 of every artifact, upstream tag + tarball digest),
-`sbom.spdx.json`, Sigstore attestations, draft-before-publish.
-The vet-time pin is the source-tarball SHA-256, not a binary asset digest.
+Same as the binary fleet: `provenance.json`, `sbom.spdx.json`, Sigstore
+attestations, draft-before-publish. The vet-time pin is the source-tarball
+SHA-256, not a binary asset digest.
