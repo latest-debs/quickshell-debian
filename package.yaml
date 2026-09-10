@@ -4,9 +4,9 @@
 #   https://git.outfoxxed.me/quickshell/quickshell
 # Mirror (for version detection only): https://github.com/quickshell-mirror/quickshell
 #
-# This is the pilot for build_mode: source. The stock debian-multiarch-builder
-# (binary-repack only) cannot build this; it needs either a builder upgrade
-# or the per-suite sbuild path documented in BUILD-SOURCE.md.
+# Built by debian-multiarch-builder's build_mode: source (compile in
+# debian:<suite>, wrap with dpkg-deb). The trixie wayland-protocols overlay is
+# expressed as a per-suite apt override below.
 
 package_name: quickshell
 github_repo: quickshell-mirror/quickshell
@@ -74,6 +74,19 @@ build_depends:
 cmake_flags:
   - -DCMAKE_BUILD_TYPE=Release
   - -DCRASH_HANDLER=OFF
+
+# trixie's wayland-protocols (1.44) predates staging/ext-background-effect-v1,
+# which the background_effect module requires unconditionally. The package is
+# Architecture: all (build-time protocol XML), so installing forky's copy with
+# `-t forky` is side-effect-free; forky/sid already ship it.
+build_apt_sources:
+  forky:
+    - "deb http://deb.debian.org/debian forky main"
+build_depends_suites:
+  trixie:
+    from: forky
+    packages:
+      - wayland-protocols
 
 # Only amd64/arm64 for the pilot; Qt+Wayland exotic-arch builds are unproven.
 architectures:
