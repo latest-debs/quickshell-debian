@@ -16,7 +16,7 @@ upstream_ref: "v0.3.1"
 artifact_format: source
 build_mode: source
 description: "Flexible QtQuick based desktop shell toolkit."
-license: LGPL-3.0-only
+license: LGPL-3.0
 
 # Debian parity exception (guard, not a current blocker): Debian only has
 # 0.3.0-1 (forky/sid — rolling, advisory; trixie-backports 0.3.0-1~bpo13+1),
@@ -37,11 +37,15 @@ skip_suites:
   - bullseye
   - bookworm
 
-# Per BUILD.md + Debian's own debian/control for quickshell 0.3.0-1.
+# Derived from upstream BUILD.md + each find_package/pkg_check_modules in the
+# tree. Crash handler disabled (-DCRASH_HANDLER=OFF) so cpptrace is not needed.
 build_depends:
+  - build-essential
   - cmake
   - ninja-build
   - pkg-config
+  - dpkg-dev
+  - lintian
   - qt6-base-dev
   - qt6-base-private-dev
   - qt6-declarative-dev
@@ -50,17 +54,26 @@ build_depends:
   - qt6-svg-dev
   - qt6-wayland-dev
   - qt6-wayland-private-dev
-  - qt6-quick3d-dev
-  - wayland-protocols
   - libdrm-dev
+  - libgbm-dev
+  - libegl-dev
+  - libglib2.0-dev
+  - libcli11-dev
+  - libvulkan-dev
+  - libxcb1-dev
+  - libwayland-dev
+  - libwayland-bin
+  - wayland-protocols
   - libpipewire-0.3-dev
-  - libpam-dev
+  - libpam0g-dev
+  - libpolkit-agent-1-dev
+  - libpolkit-gobject-1-dev
   - libjemalloc-dev
   - spirv-tools
 
 cmake_flags:
   - -DCMAKE_BUILD_TYPE=Release
-  - -DCRASH_REPORTER=OFF
+  - -DCRASH_HANDLER=OFF
 
 # Only amd64/arm64 for the pilot; Qt+Wayland exotic-arch builds are unproven.
 architectures:

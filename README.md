@@ -60,4 +60,4 @@ Unofficial, volunteer-run packaging — **best-effort, no SLA**.
 ## License
 
 Packaging scripts in this repo are MIT-licensed. Quickshell itself remains
-under its upstream license (`LGPL-3.0-only`).
+under its upstream license (`LGPL-3.0`).

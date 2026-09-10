@@ -17,16 +17,24 @@ docker run --rm -e LINTIAN="$LINTIAN" -v "$PWD:/out" -w /build "debian:$SUITE" b
 set -euo pipefail
 TAG="$1"; VER="$2"; BREV="$3"; SUITE="$4"; ARCH="$5"; DEB="$6"; LINTIAN="$7"
 apt-get update -qq
+# Dependency set derived from upstream BUILD.md + each find_package/pkg_check_modules
+# in the tree (CLI11, XCB, VulkanHeaders, wayland-client, gbm/egl, glib,
+# polkit-agent-1, polkit-gobject-1, libpipewire-0.3, pam, jemalloc). Crash
+# handler is disabled, so cpptrace is not needed.
 apt-get install -y -qq \
-  cmake ninja-build pkg-config curl ca-certificates dpkg-dev lintian \
+  build-essential cmake ninja-build pkg-config curl ca-certificates dpkg-dev lintian \
   qt6-base-dev qt6-base-private-dev qt6-declarative-dev \
   qt6-declarative-private-dev qt6-shadertools-dev qt6-svg-dev \
-  qt6-wayland-dev qt6-wayland-private-dev qt6-quick3d-dev wayland-protocols \
-  libdrm-dev libpipewire-0.3-dev libpam-dev libjemalloc-dev spirv-tools >/dev/null
+  qt6-wayland-dev qt6-wayland-private-dev \
+  libdrm-dev libgbm-dev libegl-dev libglib2.0-dev \
+  libcli11-dev libvulkan-dev libxcb1-dev \
+  libwayland-dev libwayland-bin wayland-protocols \
+  libpipewire-0.3-dev libpam0g-dev libpolkit-agent-1-dev libpolkit-gobject-1-dev \
+  libjemalloc-dev spirv-tools >/dev/null
 curl -fsSL "https://git.outfoxxed.me/quickshell/quickshell/archive/${TAG}.tar.gz" -o src.tar.gz
 mkdir -p src build stage/DEBIAN debian
 tar xzf src.tar.gz -C src --strip-components=1
-cmake -S src -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCRASH_REPORTER=OFF
+cmake -S src -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCRASH_HANDLER=OFF
 cmake --build build
 DESTDIR=/build/stage cmake --install build
 # Runtime Depends from the ELF deps actually linked (dpkg-shlibdeps), so the
