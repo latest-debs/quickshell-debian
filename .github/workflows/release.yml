@@ -205,7 +205,7 @@ jobs:
           restore-keys: apt-${{ runner.os }}-
 
       - name: Build quickshell
-        uses: ranjithrajv/debian-multiarch-builder@09669e9fd4f1acb01504bd8bc3e29ccbc351c020 # fix/source-stage-debian
+        uses: ranjithrajv/debian-multiarch-builder@464376fd91ed355208ed1007517962bcf5d089ee # v.0.1a35
         env:
           # Authenticate GitHub API calls from the builder; anonymous calls
           # from shared runner IPs are rate-limited (60/h) and caused
