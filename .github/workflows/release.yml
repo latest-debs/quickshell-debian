@@ -205,7 +205,7 @@ jobs:
           restore-keys: apt-${{ runner.os }}-
 
       - name: Build quickshell
-        uses: ranjithrajv/debian-multiarch-builder@1390291cd332080c1ab719bbd337caf553ad36fb # v.0.1a37 - chroot recreates /tmp
+        uses: ranjithrajv/debian-multiarch-builder@a4fa7c4 # v.0.1a38 - chroot keyed by arch
         env:
           # Authenticate GitHub API calls from the builder; anonymous calls
           # from shared runner IPs are rate-limited (60/h) and caused
